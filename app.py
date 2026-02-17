@@ -42,7 +42,7 @@ if 'history' not in st.session_state:
 # Sidebar configuration
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_url = st.text_input("API URL", value="http://127.0.0.1:8000")
+    api_url = st.text_input("API URL", value="https://la-model-proofread.languageacademy.com.au")
     api_token = st.text_input("API Token", value="pte_lsahdpasdhfasdhfasuaosiudfg", type="password")
     
     st.divider()
@@ -98,8 +98,15 @@ if evaluate_btn:
             try:
                 response = requests.post(
                     f"{api_url}/content-via-description",
-                    headers={"X-API-TOKEN": api_token},
-                    json={"image_description": description_input, "transcription": transcription_input},
+                    headers={
+                        "accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "image_description": description_input,
+                        "transcription": transcription_input,
+                        "token": api_token
+                    },
                     timeout=30
                 )
                 
