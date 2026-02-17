@@ -2,6 +2,10 @@ import streamlit as st
 import requests
 from datetime import datetime
 import plotly.graph_objects as go
+import urllib3
+
+# Disable SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Page config
 st.set_page_config(
@@ -96,8 +100,11 @@ if evaluate_btn:
     else:
         with st.spinner("🔄 Analyzing content..."):
             try:
+                endpoint = f"{api_url}/content-via-description"
+                st.info(f"🔗 Sending request to: {endpoint}")
+                
                 response = requests.post(
-                    f"{api_url}/content-via-description",
+                    endpoint,
                     headers={
                         "accept": "application/json",
                         "Content-Type": "application/json"
@@ -107,7 +114,8 @@ if evaluate_btn:
                         "transcription": transcription_input,
                         "token": api_token
                     },
-                    timeout=30
+                    timeout=30,
+                    verify=False
                 )
                 
                 if response.status_code == 200:
@@ -117,6 +125,7 @@ if evaluate_btn:
                     agent2 = result.get('agent_2_template_detector', {}).get('output', {})
                     
                     score = final_result.get('score', 0)
+                    content_score = agent2.get('content_score_90', 0)  # Actual content score
                     is_template = agent2.get('template_detected', False)
                     
                     # Add to history
@@ -158,7 +167,7 @@ if evaluate_btn:
                         st.plotly_chart(fig, use_container_width=True)
                     
                     with col_score2:
-                        st.metric("Content Score", f"{agent1.get('score', 0)}%")
+                        st.metric("Content Score", f"{content_score}%")
                         repetition = final_result.get('repetition_analysis', {}) or {}
                         severity = repetition.get('severity', 'none')
                         penalties = {"none": 0, "low": 5, "moderate": 10, "high": 20}
@@ -178,11 +187,10 @@ if evaluate_btn:
                         st.error(f"❌ Needs Work. Score: {score}% - Significant improvement needed")
                     
                     # Score breakdown
-                    base_score = agent1.get("score", 0)
                     if final_result.get("is_template", False):
-                        st.info(f"ℹ️ Template detected → Final score set to {score}% (original content score: {base_score}%)")
+                        st.info(f"ℹ️ Template detected → Final score set to {score}% (original content score: {content_score}%)")
                     else:
-                        st.info(f"ℹ️ Score calculation: {base_score}% (content) - {penalty}% (repetition penalty) = {score}%")
+                        st.info(f"ℹ️ Score calculation: {content_score}% (content) - {penalty}% (repetition penalty) = {score}%")
                     
                     # Detailed analysis tabs
                     st.divider()
