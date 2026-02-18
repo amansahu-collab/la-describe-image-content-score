@@ -97,6 +97,7 @@ if evaluate_btn:
                     
                     score = final_result.get('score', 0)
                     content_score = agent2.get('content_score_90', 0)  # Actual content score
+                    pte_score = final_result.get('score_out_of_90', 0)
                     is_template = agent2.get('template_detected', False)
                     
                     # Add to history
@@ -149,6 +150,7 @@ if evaluate_btn:
                         conclusion_present = agent1.get('evidence', {}).get('conclusion_marker_present', False)
                         bonus = 5 if conclusion_present else 0
                         st.metric("Conclusion Bonus", f"+{bonus}%", delta="Present" if conclusion_present else "Absent")
+                        st.metric("PTE Score", f"{pte_score}/90")
                         st.metric("Template", "Detected" if is_template else "None")
                     
                     # Performance indicator
