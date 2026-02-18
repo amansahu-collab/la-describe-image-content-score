@@ -26,16 +26,6 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-    }
-    .stTextArea textarea {
-        border-radius: 8px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,21 +62,11 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🖼️ Image Description")
-    description_input = st.text_area(
-        "Enter the reference image description:",
-        height=200,
-        placeholder="Describe what the image contains...",
-        label_visibility="collapsed"
-    )
+    description_input = st.text_area("", height=200, placeholder="Describe what the image contains...", key="desc")
 
 with col2:
     st.subheader("🎤 Student Transcription")
-    transcription_input = st.text_area(
-        "Enter the student's transcription:",
-        height=200,
-        placeholder="Enter what the student said...",
-        label_visibility="collapsed"
-    )
+    transcription_input = st.text_area("", height=200, placeholder="Enter what the student said...", key="trans")
 
 # Evaluate button
 col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
@@ -101,19 +81,10 @@ if evaluate_btn:
         with st.spinner("🔄 Analyzing content..."):
             try:
                 endpoint = f"{api_url}/content-via-description"
-                st.info(f"🔗 Sending request to: {endpoint}")
-                
                 response = requests.post(
                     endpoint,
-                    headers={
-                        "accept": "application/json",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "image_description": description_input,
-                        "transcription": transcription_input,
-                        "token": api_token
-                    },
+                    headers={"accept": "application/json", "Content-Type": "application/json"},
+                    json={"image_description": description_input, "transcription": transcription_input, "token": api_token},
                     timeout=30,
                     verify=False
                 )
@@ -170,13 +141,15 @@ if evaluate_btn:
                         st.metric("Content Score", f"{content_score}%")
                         repetition = final_result.get('repetition_analysis', {}) or {}
                         severity = repetition.get('severity', 'none')
-                        penalties = {"none": 0, "low": 5, "moderate": 10, "high": 20}
+                        penalties = {"none": 0, "low": 5, "moderate": 12, "high": 20}
                         penalty = penalties.get(severity, 0)
                         st.metric("Penalty", f"-{penalty}%", delta=f"{severity.title()}")
                     
                     with col_score3:
+                        conclusion_present = agent1.get('evidence', {}).get('conclusion_marker_present', False)
+                        bonus = 5 if conclusion_present else 0
+                        st.metric("Conclusion Bonus", f"+{bonus}%", delta="Present" if conclusion_present else "Absent")
                         st.metric("Template", "Detected" if is_template else "None")
-                        st.metric("Repetition", repetition.get('severity', 'none').title())
                     
                     # Performance indicator
                     if score >= 70:
@@ -190,7 +163,9 @@ if evaluate_btn:
                     if final_result.get("is_template", False):
                         st.info(f"ℹ️ Template detected → Final score set to {score}% (original content score: {content_score}%)")
                     else:
-                        st.info(f"ℹ️ Score calculation: {content_score}% (content) - {penalty}% (repetition penalty) = {score}%")
+                        conclusion_present = agent1.get('evidence', {}).get('conclusion_marker_present', False)
+                        bonus = 5 if conclusion_present else 0
+                        st.info(f"ℹ️ Score calculation: {content_score}% (content) - {penalty}% (penalty) + {bonus}% (bonus) = {score}%")
                     
                     # Detailed analysis tabs
                     st.divider()
@@ -199,7 +174,6 @@ if evaluate_btn:
                     with tab1:
                         st.subheader("Content Feedback")
                         st.write(final_result.get('final_feedback', 'No feedback available'))
-                        
                         if is_template:
                             st.warning("**Template Detection Alert**")
                             st.write(agent2.get('feedback', ''))
@@ -207,19 +181,16 @@ if evaluate_btn:
                     with tab2:
                         if repetition.get('phrase_repetition') or repetition.get('structure_repetition') or repetition.get('connector_overuse'):
                             col_rep1, col_rep2, col_rep3 = st.columns(3)
-                            
                             with col_rep1:
                                 if repetition.get('phrase_repetition'):
                                     st.markdown("**🔁 Repeated Phrases**")
                                     for item in repetition['phrase_repetition']:
                                         st.write(f"• '{item['phrase']}' ×{item['count']}")
-                            
                             with col_rep2:
                                 if repetition.get('structure_repetition'):
                                     st.markdown("**📐 Repeated Structures**")
                                     for item in repetition['structure_repetition']:
                                         st.write(f"• {item['pattern']} ×{item['count']}")
-                            
                             with col_rep3:
                                 if repetition.get('connector_overuse'):
                                     st.markdown("**🔗 Overused Connectors**")
