@@ -147,7 +147,7 @@ if evaluate_btn:
                         st.metric("Penalty", f"-{penalty}%", delta=f"{severity.title()}")
                     
                     with col_score3:
-                        conclusion_present = agent1.get('evidence', {}).get('conclusion_marker_present', False)
+                        conclusion_present = agent2.get('evidence', {}).get('conclusion_marker_present', False)
                         bonus = 5 if conclusion_present else 0
                         st.metric("Conclusion Bonus", f"+{bonus}%", delta="Present" if conclusion_present else "Absent")
                         st.metric("PTE Score", f"{pte_score}/90")
@@ -165,7 +165,7 @@ if evaluate_btn:
                     if final_result.get("is_template", False):
                         st.info(f"ℹ️ Template detected → Final score set to {score}% (original content score: {content_score}%)")
                     else:
-                        conclusion_present = agent1.get('evidence', {}).get('conclusion_marker_present', False)
+                        conclusion_present = agent2.get('evidence', {}).get('conclusion_marker_present', False)
                         bonus = 5 if conclusion_present else 0
                         st.info(f"ℹ️ Score calculation: {content_score}% (content) - {penalty}% (penalty) + {bonus}% (bonus) = {score}%")
                     
