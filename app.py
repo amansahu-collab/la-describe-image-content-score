@@ -142,7 +142,7 @@ if evaluate_btn:
                         st.metric("Content Score", f"{content_score}%")
                         repetition = final_result.get('repetition_analysis', {}) or {}
                         severity = repetition.get('severity', 'none')
-                        penalties = {"none": 0, "low": 5, "moderate": 12, "high": 20}
+                        penalties = {"none": 0, "low": 5, "moderate": 8, "high": 15}
                         penalty = penalties.get(severity, 0)
                         st.metric("Penalty", f"-{penalty}%", delta=f"{severity.title()}")
                     
