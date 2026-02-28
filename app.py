@@ -32,6 +32,8 @@ st.markdown("""
 # Initialize session state
 if 'history' not in st.session_state:
     st.session_state.history = []
+if 'last_response' not in st.session_state:
+    st.session_state.last_response = None
 
 # Sidebar configuration
 with st.sidebar:
@@ -106,7 +108,8 @@ if evaluate_btn:
                         'score': score,
                         'template': is_template
                     })
-                    
+                    st.session_state.last_response = result
+
                     st.success("✅ Evaluation completed successfully!")
                     
                     # Score visualization
@@ -226,6 +229,41 @@ if evaluate_btn:
                 st.error("🔌 Connection failed. Please check if the API server is running.")
             except Exception as e:
                 st.error(f"❌ Unexpected error: {str(e)}")
+
+
+if st.session_state.last_response:
+    st.divider()
+    st.subheader("💬 Add Your Remark")
+    with st.form("remark_form"):
+        student_remark = st.text_area("Your Remark", placeholder="Share your thoughts on this evaluation...")
+        expected_score = st.number_input("Expected Score", min_value=0, max_value=100, value=st.session_state.last_response.get('final_result', {}).get('score', 0))
+        submit_remark = st.form_submit_button("Submit Remark", use_container_width=True)
+        
+        if submit_remark:
+            if not student_remark:
+                st.error("Please enter a remark")
+            else:
+                try:
+                    remark_response = requests.post(
+                        f"{api_url}/remark",
+                        headers={"accept": "application/json", "Content-Type": "application/json"},
+                        json={
+                            "evaluation_response": st.session_state.last_response,
+                            "student_remark": student_remark,
+                            "expected_score": expected_score,
+                            "token": api_token
+                        },
+                        timeout=10,
+                        verify=False
+                    )
+                    if remark_response.status_code == 200:
+                        st.success(f"✅ Remark saved! ID: {remark_response.json().get('id')}")
+                    else:
+                        st.error(f"Failed to save remark: {remark_response.text}")
+                except Exception as e:
+                    st.error(f"Error saving remark: {str(e)}")
+
+
 
 # Footer
 st.divider()
