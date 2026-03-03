@@ -23,11 +23,13 @@ def load_data():
         expected = doc.get('expected_score', 0)
         grounded = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('grounded_elements_found', [])
         template_signals = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('generic_template_signals', [])
+        updated_score = doc.get('updated_model_score', {}).get('final_result', {}).get('score_out_of_90', None)
         
         records.append({
             'id': str(doc.get('_id', '')),
             'score': score,
             'expected_score': expected,
+            'updated_score': updated_score if updated_score is not None else '-',
             'score_diff': abs(score - expected),
             'remark': doc.get('student_remark', ''),
             'is_template': doc.get('evaluation_response', {}).get('final_result', {}).get('is_template', False),
@@ -121,66 +123,94 @@ st.plotly_chart(fig, use_container_width=True)
 st.subheader("📋 Response Details")
 
 # Column headers
-col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1])
+col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1, 1, 1, 1, 1.5, 1, 1, 1.5, 1])
 col1.markdown("**Transcription**")
 col2.markdown("**Score**")
-col3.markdown("**Expected**")
-col4.markdown("**Remark**")
-col5.markdown("**Grounded #**")
-col6.markdown("**Template Signals**")
-col7.markdown("**Repetition**")
-col8.markdown("**Full Response**")
+col3.markdown("**Updated Score**")
+col4.markdown("**Expected**")
+col5.markdown("**Remark**")
+col6.markdown("**Grounded #**")
+col7.markdown("**Template Signals**")
+col8.markdown("**Repetition**")
+col9.markdown("**Full Response**")
 st.divider()
 
 for idx, row in filtered_df.iterrows():
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1])
+    col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1, 1, 1, 1, 1.5, 1, 1, 1.5, 1])
     
     if col1.button("📝", key=f"trans_{idx}", use_container_width=True):
         st.session_state[f'show_trans_{idx}'] = not st.session_state.get(f'show_trans_{idx}', False)
     
     col2.write(row['score'])
-    col3.write(row['expected_score'])
-    col4.write(row['remark'])
+    col3.write(row['updated_score'])
+    col4.write(row['expected_score'])
+    col5.write(row['remark'])
     
-    if col5.button(f"📊 {row['grounded_count']}", key=f"btn_{idx}", use_container_width=True):
+    if col6.button(f"📊 {row['grounded_count']}", key=f"btn_{idx}", use_container_width=True):
         st.session_state[f'show_{idx}'] = not st.session_state.get(f'show_{idx}', False)
     
     if row['is_template'] and row['template_signals_count'] > 0:
-        if col6.button(f"⚠️ {row['template_signals_count']}", key=f"signals_{idx}", use_container_width=True):
+        if col7.button(f"⚠️ {row['template_signals_count']}", key=f"signals_{idx}", use_container_width=True):
             st.session_state[f'show_signals_{idx}'] = not st.session_state.get(f'show_signals_{idx}', False)
     else:
-        col6.markdown("<div style='text-align: center'>❌</div>", unsafe_allow_html=True)
+        col7.markdown("<div style='text-align: center'>❌</div>", unsafe_allow_html=True)
     
-    col7.write(row['repetition_severity'])
+    col8.write(row['repetition_severity'])
     
-    if col8.button("📜", key=f"full_{idx}", use_container_width=True):
+    if col9.button("📜", key=f"full_{idx}", use_container_width=True):
         st.session_state[f'show_full_{idx}'] = not st.session_state.get(f'show_full_{idx}', False)
     
     if st.session_state.get(f'show_{idx}', False):
-        st.markdown(f"**Grounded Elements for Row {idx}:**")
-        collection = get_database()
-        from bson import ObjectId
-        doc = collection.find_one({'_id': ObjectId(row['id'])})
-        if doc:
-            grounded = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('grounded_elements_found', [])
-            if grounded:
-                for elem in grounded:
-                    st.markdown(f"  • {elem}")
+        col_v0, col_v1 = st.columns(2)
+        with col_v0:
+            st.markdown(f"**V0 Grounded Elements (Row {idx}):**")
+            collection = get_database()
+            from bson import ObjectId
+            doc = collection.find_one({'_id': ObjectId(row['id'])})
+            if doc:
+                grounded = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('grounded_elements_found', [])
+                if grounded:
+                    for elem in grounded:
+                        st.markdown(f"  • {elem}")
+                else:
+                    st.info("No grounded elements found")
+        with col_v1:
+            st.markdown(f"**V1 Grounded Elements (Row {idx}):**")
+            if doc and doc.get('updated_model_score'):
+                grounded_v1 = doc.get('updated_model_score', {}).get('agent_1_content_scorer', {}).get('output', {}).get('evidence', {}).get('grounded_elements_found', [])
+                if grounded_v1:
+                    for elem in grounded_v1:
+                        st.markdown(f"  • {elem}")
+                else:
+                    st.info("No grounded elements found")
             else:
-                st.info("No grounded elements found")
+                st.info("V1 data not available")
     
     if st.session_state.get(f'show_signals_{idx}', False):
-        st.markdown(f"**Template Signals for Row {idx}:**")
-        collection = get_database()
-        from bson import ObjectId
-        doc = collection.find_one({'_id': ObjectId(row['id'])})
-        if doc:
-            signals = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('generic_template_signals', [])
-            if signals:
-                for signal in signals:
-                    st.markdown(f"  • {signal}")
+        col_v0, col_v1 = st.columns(2)
+        with col_v0:
+            st.markdown(f"**V0 Template Signals (Row {idx}):**")
+            collection = get_database()
+            from bson import ObjectId
+            doc = collection.find_one({'_id': ObjectId(row['id'])})
+            if doc:
+                signals = doc.get('evaluation_response', {}).get('agent_2_template_detector', {}).get('output', {}).get('evidence', {}).get('generic_template_signals', [])
+                if signals:
+                    for signal in signals:
+                        st.markdown(f"  • {signal}")
+                else:
+                    st.info("No template signals found")
+        with col_v1:
+            st.markdown(f"**V1 Template Signals (Row {idx}):**")
+            if doc and doc.get('updated_model_score'):
+                signals_v1 = doc.get('updated_model_score', {}).get('agent_1_content_scorer', {}).get('output', {}).get('evidence', {}).get('generic_template_signals', [])
+                if signals_v1:
+                    for signal in signals_v1:
+                        st.markdown(f"  • {signal}")
+                else:
+                    st.info("No template signals found")
             else:
-                st.info("No template signals found")
+                st.info("V1 data not available")
     
     if st.session_state.get(f'show_trans_{idx}', False):
         st.markdown(f"**Transcription for Row {idx}:**")
