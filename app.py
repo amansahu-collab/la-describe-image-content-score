@@ -98,26 +98,23 @@ if evaluate_btn:
                     agent2 = result.get('agent_2_template_detector', {}).get('output', {})
                     
                     score = final_result.get('score', 0)
-                    content_score = agent2.get('content_score_90', 0)  # Actual content score
                     pte_score = final_result.get('score_out_of_90', 0)
-                    is_template = agent2.get('template_detected', False)
+                    is_template = final_result.get('is_template', False)
                     
-                    # Add to history
                     st.session_state.history.append({
                         'timestamp': datetime.now().strftime("%H:%M:%S"),
                         'score': score,
                         'template': is_template
                     })
+                    
                     st.session_state.last_response = result
-
+                    
                     st.success("✅ Evaluation completed successfully!")
                     
-                    # Score visualization
                     st.divider()
-                    col_score1, col_score2, col_score3 = st.columns([2, 1, 1])
+                    col_score1, col_score2 = st.columns([3, 2])
                     
                     with col_score1:
-                        # Gauge chart
                         fig = go.Figure(go.Indicator(
                             mode="gauge+number+delta",
                             value=score,
@@ -131,32 +128,92 @@ if evaluate_btn:
                                     {'range': [40, 70], 'color': "#ffe"},
                                     {'range': [70, 100], 'color': "#efe"}
                                 ],
-                                'threshold': {
-                                    'line': {'color': "red", 'width': 4},
-                                    'thickness': 0.75,
-                                    'value': 70
-                                }
+                                'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 70}
                             }
                         ))
                         fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20))
                         st.plotly_chart(fig, use_container_width=True)
                     
                     with col_score2:
-                        st.metric("Content Score", f"{content_score}%")
-                        repetition = final_result.get('repetition_analysis', {}) or {}
-                        severity = repetition.get('severity', 'none')
-                        penalties = {"none": 0, "low": 5, "moderate": 8, "high": 15}
-                        penalty = penalties.get(severity, 0)
-                        st.metric("Penalty", f"-{penalty}%", delta=f"{severity.title()}")
-                    
-                    with col_score3:
-                        conclusion_present = agent2.get('evidence', {}).get('conclusion_marker_present', False)
-                        bonus = 5 if conclusion_present else 0
-                        st.metric("Conclusion Bonus", f"+{bonus}%", delta="Present" if conclusion_present else "Absent")
                         st.metric("PTE Score", f"{pte_score}/90")
                         st.metric("Template", "Detected" if is_template else "None")
+                        grounded_elements = agent1.get('evidence', {}).get('grounded_elements_found', [])
+                        st.metric("Grounded Elements", len(grounded_elements))
                     
-                    # Performance indicator
+                    # Score breakdown section
+                    st.divider()
+                    st.subheader("📊 Score Calculation Breakdown")
+                    
+                    if is_template:
+                        st.error("🚫 Template Detected - Score set to 0")
+                        st.caption("Response uses generic phrases without specific image details")
+                    else:
+                        grounded_elements = agent1.get('evidence', {}).get('grounded_elements_found', [])
+                        grounded_count = len(grounded_elements)
+                        agent2_score = agent2.get('content_relevancy_score', 0)
+                        template_signals = agent1.get('evidence', {}).get('generic_template_signals', [])
+                        repetition = final_result.get('repetition_analysis', {}) or {}
+                        severity = repetition.get('severity', 'none')
+                        conclusion_present = agent2.get('conclusion_marker_present', False)
+                        
+                        if grounded_count == 0:
+                            score_range = (10, 10)
+                        elif grounded_count == 1:
+                            score_range = (11, 29)
+                        elif grounded_count == 2:
+                            score_range = (30, 49)
+                        elif grounded_count == 3:
+                            score_range = (50, 59)
+                        elif grounded_count == 4:
+                            score_range = (60, 69)
+                        elif grounded_count in [5, 6]:
+                            score_range = (70, 79)
+                        elif grounded_count == 7:
+                            score_range = (80, 89)
+                        else:
+                            score_range = (90, 100)
+                        
+                        range_min, range_max = score_range
+                        if range_min == range_max:
+                            base_score = range_min
+                        else:
+                            base_score = range_min + int(agent2_score * 0.10)
+                        
+                        penalties_map = {"none": 0, "low": 5, "moderate": 8, "high": 15}
+                        repetition_penalty = penalties_map.get(severity, 0)
+                        template_signal_penalty = len(template_signals) * 2
+                        conclusion_adjustment = 5 if conclusion_present else -5
+                        
+                        col_break1, col_break2, col_break3 = st.columns(3)
+                        
+                        with col_break1:
+                            st.markdown("**🎯 Base Score Components**")
+                            st.write(f"• Grounded Elements: {grounded_count}")
+                            st.write(f"• Score Range: {range_min}-{range_max}")
+                            st.write(f"• Agent 2 Relevancy: {agent2_score}%")
+                            st.metric("Base Score", f"{base_score}%", help="Based on grounded elements + relevancy")
+                        
+                        with col_break2:
+                            st.markdown("**➖ Penalties Applied**")
+                            st.write(f"• Repetition ({severity}): -{repetition_penalty}%")
+                            st.write(f"• Template Signals ({len(template_signals)}): -{template_signal_penalty}%")
+                            total_penalty = repetition_penalty + template_signal_penalty
+                            st.metric("Total Penalty", f"-{total_penalty}%", delta=f"{severity.title()}", delta_color="inverse")
+                        
+                        with col_break3:
+                            st.markdown("**➕ Adjustments**")
+                            if conclusion_present:
+                                st.write(f"• Conclusion Present: +5%")
+                            else:
+                                st.write(f"• No Conclusion: -5%")
+                            st.metric("Conclusion", f"{conclusion_adjustment:+d}%", delta="Present" if conclusion_present else "Absent")
+                        
+                        st.markdown("---")
+                        calculation = f"**Final Score = {base_score} (base) - {repetition_penalty} (repetition) - {template_signal_penalty} (template signals) {conclusion_adjustment:+d} (conclusion) = {score}%**"
+                        st.markdown(calculation)
+                    
+                    st.divider()
+                    
                     if score >= 70:
                         st.success(f"🎉 Excellent! Score: {score}% - Strong performance")
                     elif score >= 40:
@@ -164,26 +221,52 @@ if evaluate_btn:
                     else:
                         st.error(f"❌ Needs Work. Score: {score}% - Significant improvement needed")
                     
-                    # Score breakdown
-                    if final_result.get("is_template", False):
-                        st.info(f"ℹ️ Template detected → Final score set to {score}% (original content score: {content_score}%)")
-                    else:
-                        conclusion_present = agent2.get('evidence', {}).get('conclusion_marker_present', False)
-                        bonus = 5 if conclusion_present else 0
-                        st.info(f"ℹ️ Score calculation: {content_score}% (content) - {penalty}% (penalty) + {bonus}% (bonus) = {score}%")
-                    
-                    # Detailed analysis tabs
                     st.divider()
-                    tab1, tab2, tab3, tab4 = st.tabs(["📋 Feedback", "🔍 Repetition Analysis", "🤖 Agent Details", "📄 Raw Data"])
+                    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Feedback", "🔍 Analysis Details", "🔁 Repetition Analysis", "🤖 Agent Details", "📄 Raw Data"])
                     
                     with tab1:
                         st.subheader("Content Feedback")
                         st.write(final_result.get('final_feedback', 'No feedback available'))
                         if is_template:
                             st.warning("**Template Detection Alert**")
-                            st.write(agent2.get('feedback', ''))
+                            template_signals = agent1.get('evidence', {}).get('generic_template_signals', [])
+                            if template_signals:
+                                st.write("Generic phrases detected:")
+                                for signal in template_signals:
+                                    st.write(f"• \"{signal}\"")
                     
                     with tab2:
+                        st.subheader("Detailed Analysis")
+                        
+                        col_detail1, col_detail2 = st.columns(2)
+                        
+                        with col_detail1:
+                            st.markdown("**✅ Grounded Elements Found**")
+                            grounded_elements = agent1.get('evidence', {}).get('grounded_elements_found', [])
+                            if grounded_elements:
+                                for idx, elem in enumerate(grounded_elements, 1):
+                                    st.write(f"{idx}. {elem}")
+                            else:
+                                st.info("No specific image elements mentioned")
+                        
+                        with col_detail2:
+                            st.markdown("**⚠️ Generic Template Signals**")
+                            template_signals = agent1.get('evidence', {}).get('generic_template_signals', [])
+                            if template_signals:
+                                for idx, signal in enumerate(template_signals, 1):
+                                    st.write(f"{idx}. \"{signal}\"")
+                            else:
+                                st.success("No generic phrases detected")
+                        
+                        st.markdown("---")
+                        st.markdown("**📈 Agent 2 Content Relevancy Analysis**")
+                        agent2_score = agent2.get('content_relevancy_score', 0)
+                        st.progress(agent2_score / 100)
+                        st.write(f"Content Relevancy Score: {agent2_score}%")
+                        st.caption("This score measures how well the response describes visually interpretable content from the image")
+                    
+                    with tab3:
+                        repetition = final_result.get('repetition_analysis', {}) or {}
                         if repetition.get('phrase_repetition') or repetition.get('structure_repetition') or repetition.get('connector_overuse'):
                             col_rep1, col_rep2, col_rep3 = st.columns(3)
                             with col_rep1:
@@ -204,7 +287,7 @@ if evaluate_btn:
                         else:
                             st.info("No significant repetition detected")
                     
-                    with tab3:
+                    with tab4:
                         col_agent1, col_agent2 = st.columns(2)
                         with col_agent1:
                             st.subheader("Agent 1: Content Scorer")
@@ -213,7 +296,7 @@ if evaluate_btn:
                             st.subheader("Agent 2: Template Detector")
                             st.json(agent2)
                     
-                    with tab4:
+                    with tab5:
                         st.json(result)
                 
                 elif response.status_code == 401:
