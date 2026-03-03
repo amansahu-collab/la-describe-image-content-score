@@ -114,7 +114,14 @@ with col5:
 # Charts
 st.subheader("📈 Score vs Expected Score")
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df['score'], mode='lines+markers', name='Actual Score', line=dict(color='#1f77b4')))
+fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df['score'], mode='lines+markers', name='V0 Score', line=dict(color='#1f77b4')))
+
+# Add V1 scores only for rows that have updated_model_score
+filtered_df_with_v1 = filtered_df[filtered_df['updated_score'] != '-'].copy()
+if not filtered_df_with_v1.empty:
+    filtered_df_with_v1['updated_score_num'] = pd.to_numeric(filtered_df_with_v1['updated_score'])
+    fig.add_trace(go.Scatter(x=filtered_df_with_v1.index, y=filtered_df_with_v1['updated_score_num'], mode='lines+markers', name='V1 Score', line=dict(color='#2ca02c')))
+
 fig.add_trace(go.Scatter(x=filtered_df.index, y=filtered_df['expected_score'], mode='lines+markers', name='Expected Score', line=dict(color='#ff7f0e')))
 fig.update_layout(height=400, hovermode='x unified')
 st.plotly_chart(fig, use_container_width=True)
@@ -142,7 +149,10 @@ for idx, row in filtered_df.iterrows():
         st.session_state[f'show_trans_{idx}'] = not st.session_state.get(f'show_trans_{idx}', False)
     
     col2.write(row['score'])
-    col3.write(row['updated_score'])
+    if row['updated_score'] != '-':
+        col3.markdown(f"<div style='color: #2ca02c; font-weight: bold'>{row['updated_score']}</div>", unsafe_allow_html=True)
+    else:
+        col3.write(row['updated_score'])
     col4.write(row['expected_score'])
     col5.write(row['remark'])
     
